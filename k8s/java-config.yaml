@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: java-config
+  namespace: java-demo
+data:
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-service:5432/productsdb
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: java-secret
+  namespace: java-demo
+type: Opaque
+stringData:
+  SPRING_DATASOURCE_USERNAME: postgres
+  SPRING_DATASOURCE_PASSWORD: postgres123
