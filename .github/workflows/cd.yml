@@ -1,106 +1,44 @@
-name: Java CD
+name: Update Deployment Image
 
 on:
-  push:
-    branches:
-      - main
-
-  workflow_dispatch:
+  repository_dispatch:
+    types:
+      - deploy
 
 permissions:
-  contents: read
-
-env:
-  NAMESPACE: java-demo
+  contents: write
 
 jobs:
-  deploy:
-    name: Deploy to Docker Desktop Kubernetes
-    runs-on: self-hosted
+  update-image:
+    runs-on: ubuntu-latest
 
     steps:
-
-      # 1. Checkout Repository 2
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 2. Check kubectl
-      - name: Check Kubernetes connection
-        shell: powershell
+      - name: Print Payload
         run: |
-          kubectl version --client
-          kubectl get nodes
+          echo "Tag: ${{ github.event.client_payload.tag }}"
+          echo "Image: ${{ github.event.client_payload.image }}"
 
-      # 3. Create namespace
-      - name: Apply namespace
-        shell: powershell
+      - name: Update Deployment Manifest
         run: |
-          kubectl apply -f k8s/namespace.yaml
+          IMAGE="${{ github.event.client_payload.image }}"
 
-      # 4. Deploy PostgreSQL configuration
-      - name: Apply PostgreSQL configuration
-        shell: powershell
-        run: |
-          kubectl apply -f k8s/postgres-secret.yaml
-          kubectl apply -f k8s/postgres-config.yaml
-          kubectl apply -f k8s/postgres-pvc.yaml
+          sed -i "s|image: .*|image: ${IMAGE}|g" k8s/java-deployment.yaml
 
-      # 5. Deploy PostgreSQL
-      - name: Deploy PostgreSQL
-        shell: powershell
-        run: |
-          kubectl apply -f k8s/postgres-deployment.yaml
-          kubectl apply -f k8s/postgres-service.yaml
+          echo "Updated Manifest:"
+          cat k8s/java-deployment.yaml
 
-      # 6. Wait for PostgreSQL
-      - name: Wait for PostgreSQL
-        shell: powershell
+      - name: Commit Changes
         run: |
-          kubectl rollout status deployment/postgres `
-            -n $env:NAMESPACE `
-            --timeout=180s
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
 
-      # 7. Deploy Java configuration
-      - name: Apply Java configuration
-        shell: powershell
-        run: |
-          kubectl apply -f k8s/java-config.yaml
-          kubectl apply -f k8s/java-secret.yaml
+          git add k8s/java-deployment.yaml
 
-      # 8. Deploy Java application
-      - name: Deploy Java application
-        shell: powershell
-        run: |
-          kubectl apply -f k8s/java-deployment.yaml
-          kubectl apply -f k8s/java-service.yaml
+          git commit -m "Update image to ${{ github.event.client_payload.image }}" || echo "No changes to commit"
 
-      # 9. Wait for Java application
-      - name: Wait for Java application
-        shell: powershell
+      - name: Push Changes
         run: |
-          kubectl rollout status deployment/java-app `
-            -n $env:NAMESPACE `
-            --timeout=300s
-
-      # 10. Deploy Adminer
-      - name: Deploy Adminer
-        shell: powershell
-        run: |
-          kubectl apply -f k8s/adminer-deployment.yaml
-          kubectl apply -f k8s/adminer-service.yaml
-
-      # 11. Wait for Adminer
-      - name: Wait for Adminer
-        shell: powershell
-        run: |
-          kubectl rollout status deployment/adminer `
-            -n $env:NAMESPACE `
-            --timeout=180s
-
-      # 12. Show deployment status
-      - name: Show Kubernetes resources
-        shell: powershell
-        run: |
-          kubectl get pods -n $env:NAMESPACE
-          kubectl get services -n $env:NAMESPACE
-          kubectl get deployments -n $env:NAMESPACE
+          git push origin main

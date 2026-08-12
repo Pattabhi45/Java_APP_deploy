@@ -19,7 +19,7 @@ spec:
       containers:
       - name: java-app
 
-        image: YOUR_DOCKERHUB_USERNAME/spring-boot-crud-postgres-adminer:latest
+        image: pattabhi4518/java-crud-app:v0.0.1
 
         imagePullPolicy: Always
 
