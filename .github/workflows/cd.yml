@@ -18,7 +18,7 @@ jobs:
  
       - name: Update Image Version
         run: |
-          sed -i "s|image: .*|image: magibalan07/spring-boot-crud-postgres-adminer:${{ github.event.client_payload.image_tag }}|g" 05-java-deployment.yaml
+          sed -i "s|image: .*|image: pattabhi4518/spring-boot-crud-postgres-adminer:${{ github.event.client_payload.image_tag }}|g" 05-java-deployment.yaml
  
       - name: Commit Changes
         run: |
