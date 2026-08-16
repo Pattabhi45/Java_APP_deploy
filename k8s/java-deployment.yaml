@@ -19,7 +19,7 @@ spec:
       containers:
       - name: java-app
 
-        image: pattabhi4518/java-crud-app:v0.0.1
+        image: ghcr.io/pattabhi45/spring-boot-crud-postgres-adminer:v1.0.3
 
         imagePullPolicy: Always
 
