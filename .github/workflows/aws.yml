@@ -180,7 +180,7 @@ jobs:
           echo "=========================================="
 
           kubectl rollout status \
-            deployment/java-demo-app \
+            deployment/java-app \
             -n java-demo \
             --timeout=180s
 
