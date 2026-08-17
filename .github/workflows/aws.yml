@@ -1,0 +1,192 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ----------------------------------------
+      # Configure SSH
+      # ----------------------------------------
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -e
+
+          echo "=========================================="
+          echo "Configuring SSH"
+          echo "=========================================="
+
+          mkdir -p ~/.ssh
+
+          printf '%s\n' "${{ secrets.EC2_PEM }}" > ~/.ssh/ec2.pem
+          chmod 600 ~/.ssh/ec2.pem
+
+          echo "Testing EC2 host..."
+
+          ssh-keyscan -T 10 -H "${{ secrets.EC2_HOST }}" \
+            >> ~/.ssh/known_hosts
+
+          echo "SSH configuration completed"
+
+      # ----------------------------------------
+      # Connect and deploy to EC2
+      # ----------------------------------------
+      - name: Deploy to EC2
+        run: |
+          ssh -i ~/.ssh/ec2.pem \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
+            "bash -s" << 'EOF'
+
+          set -e
+
+          echo "=========================================="
+          echo "Connected to EC2"
+          echo "=========================================="
+
+          hostname
+          whoami
+
+          # ----------------------------------------
+          # Deployment repository configuration
+          # ----------------------------------------
+
+          DEPLOY_DIR="/home/ubuntu/deployment"
+
+          REPO="https://github.com/Pattabhi45/Java_APP_deploy.git"
+
+          echo "=========================================="
+          echo "Updating deployment repository"
+          echo "=========================================="
+
+          # ----------------------------------------
+          # Clone repository if it doesn't exist
+          # Otherwise pull latest code
+          # ----------------------------------------
+
+          if [ -d "$DEPLOY_DIR/.git" ]; then
+
+              echo "Repository exists."
+              echo "Pulling latest code..."
+
+              cd "$DEPLOY_DIR"
+
+              git remote set-url origin \
+                "https://github.com/Pattabhi45/Java_APP_deploy.git"
+
+              git fetch origin
+
+              git reset --hard origin/main
+
+          else
+
+              echo "Repository not found."
+              echo "Cloning deployment repository..."
+
+              rm -rf "$DEPLOY_DIR"
+
+              git clone \
+                "https://github.com/Pattabhi45/Java_APP_deploy.git" \
+                "$DEPLOY_DIR"
+
+              cd "$DEPLOY_DIR"
+
+          fi
+
+          echo "=========================================="
+          echo "Repository updated"
+          echo "=========================================="
+
+          git log -1 --oneline
+
+          # ----------------------------------------
+          # Check Kubernetes
+          # ----------------------------------------
+
+          echo "=========================================="
+          echo "Checking Kubernetes"
+          echo "=========================================="
+
+          kubectl get nodes
+
+          # ----------------------------------------
+          # Create namespace
+          # ----------------------------------------
+
+          echo "=========================================="
+          echo "Creating namespace"
+          echo "=========================================="
+
+          kubectl create namespace java-demo \
+            --dry-run=client \
+            -o yaml | kubectl apply -f -
+
+          # ----------------------------------------
+          # Deploy Kubernetes manifests
+          # ----------------------------------------
+
+          echo "=========================================="
+          echo "Deploying Kubernetes Manifests"
+          echo "=========================================="
+
+          cd "$DEPLOY_DIR/k8s"
+
+          find . \
+            -maxdepth 1 \
+            -type f \
+            \( -name "*.yaml" -o -name "*.yml" \) \
+            ! -name "kustomization.yaml" \
+            -exec kubectl apply -f {} -n java-demo \;
+
+          # ----------------------------------------
+          # Deployment status
+          # ----------------------------------------
+
+          echo "=========================================="
+          echo "Deployment Status"
+          echo "=========================================="
+
+          kubectl get deployments -n java-demo
+
+          echo "------------------------------------------"
+
+          kubectl get pods -n java-demo
+
+          echo "------------------------------------------"
+
+          kubectl get services -n java-demo
+
+          # ----------------------------------------
+          # Wait for Java deployment
+          # ----------------------------------------
+
+          echo "=========================================="
+          echo "Waiting for Java deployment"
+          echo "=========================================="
+
+          kubectl rollout status \
+            deployment/java-demo-app \
+            -n java-demo \
+            --timeout=180s
+
+          # ----------------------------------------
+          # Final status
+          # ----------------------------------------
+
+          echo "=========================================="
+          echo "Final Pod Status"
+          echo "=========================================="
+
+          kubectl get pods -n java-demo
+
+          echo "=========================================="
+          echo "Deployment Completed Successfully!"
+          echo "=========================================="
+
+          EOF

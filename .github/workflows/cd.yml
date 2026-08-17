@@ -1,33 +1,39 @@
-name: CD Pipeline
- 
+name: Deploy Java Application on K8s
+
 on:
-  repository_dispatch:
-    types:
-      - deploy-app
+  push:
+    branches:
+      - main
 
-  workflow_dispatch:
- 
-permissions:
-  contents: write
- 
 jobs:
-  update-manifest:
-    runs-on: ubuntu-latest
- 
+  deploy:
+    runs-on: self-hosted
+
     steps:
-      - name: Checkout Repository
+
+      - name: Checkout deployment repository
         uses: actions/checkout@v4
-      - name: Update Image Version
+
+      - name: Verify Kubernetes connection
         run: |
-          sed -i "s|image: .*|image: pattabhi4518/spring-boot-crud-postgres-adminer:${{ github.event.client_payload.image_tag }}|g" k8s/java-deployment.yaml
+          kubectl cluster-info
+          kubectl get nodes
 
-      - name: Commit Changes
+      - name: Create Namespace
         run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
+          kubectl create namespace java-demo \
+            --dry-run=client \
+            -o yaml | kubectl apply -f -
 
-          git add k8s/java-deployment.yaml
+      - name: Deploy Java application
+        working-directory: ./k8s
+        run: |
+          kubectl apply \
+            -f java-deployment.yaml \
+            -n java-demo
 
-          git commit -m "Update image to ${{ github.event.client_payload.image_tag }}" || true
-
-          
+      - name: Check deployment status
+        run: |
+          kubectl rollout status deployment/java-demo-app \
+            -n java-demo \
+            --timeout=120s
